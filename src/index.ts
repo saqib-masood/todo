@@ -1,46 +1,50 @@
 import express from 'express';
-import { start } from 'repl';
+const { Pool } = require('pg');
 
 const app = express();
 const PORT = 3000;
 
-app.use(express.json()); // Middleware to parse JSON bodies
+app.use(express.json());
 
-// In-memory array to store todos
-let todos: { id: number; task: string; completed: boolean }[] = [];
+// PostgreSQL connection pool
+const pool = new Pool({
+  user: 'saqib',
+  host: 'localhost',
+  database: 'Databases',
+  password: 'Delhi@2001',
+  port: 5432,
+});
 
 // GET endpoint to fetch all todos
-app.get('/todos', (req, res) => {
-  res.status(200).json(todos);
+app.get('/todos', async (req, res) => {
+  const { rows } = await pool.query('SELECT * FROM todos ORDER BY id ASC');
+  res.status(200).json(rows);
 });
 
 // POST endpoint to create a new todo
-app.post('/todos', (req, res) => {
+app.post('/todos', async (req, res) => {
   const { task } = req.body;
-  const newTodo = { id: todos.length + 1, task, completed: false };
-  todos.push(newTodo);
-  res.status(201).json(newTodo);
+  const { rows } = await pool.query('INSERT INTO todo (task) VALUES ($1) RETURNING *', [task]);
+  res.status(201).json(rows[0]);
 });
 
 // PUT endpoint to update a todo
-app.put('/todos/:id', (req, res) => {
+app.put('/todos/:id', async (req, res) => {
   const { id } = req.params;
   const { task, completed } = req.body;
+  const { rows } = await pool.query('UPDATE todo SET task = $1, completed = $2 WHERE id = $3 RETURNING *', [task, completed, id]);
 
-  const todo = todos.find(todo => todo.id === parseInt(id));
-  if (!todo) {
+  if (rows.length === 0) {
     return res.status(404).json({ message: 'Todo not found' });
   }
 
-  todo.task = task;
-  todo.completed = completed;
-  res.json(todo);
+  res.json(rows[0]);
 });
 
 // DELETE endpoint to delete a todo
-app.delete('/todos/:id', (req, res) => {
+app.delete('/todos/:id', async (req, res) => {
   const { id } = req.params;
-  todos = todos.filter(todo => todo.id !== parseInt(id));
+  await pool.query('DELETE FROM todos WHERE id = $1', [id]);
   res.status(204).send();
 });
 
